@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String?  @unique
+  passwordHash  String?  // null when using MetaMask-only auth
+  name          String
+  role          String   @default("citizen") // citizen | authority | admin
+  walletAddress String?  @unique // MetaMask wallet address
+  avatar        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([email])
+  @@index([walletAddress])
+}
+
+model AuthNonce {
+  id        String   @id @default(cuid())
+  address   String   @unique // wallet address (lowercase)
+  nonce     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model Record {
+  id          String   @id @default(cuid())
+  recordId    String   @unique // e.g. REC-001234
+  title       String
+  category    String   // birth_certificate | property_deed | legal_document | etc
+  description String
+  content     String   @db.Text
+  status      String   @default("pending") // draft | pending | verified | rejected | revoked
+  ownerId     String
+  authorityId String?
+  createdBy   String
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Blockchain verification (simulated for now)
+  blockchainIsVerified    Boolean   @default(false)
+  blockchainBlockNumber   Int?
+  blockchainTxHash       String?
+  blockchainTimestamp     DateTime?
+  blockchainNetwork       String?   @default("testnet")
+  blockchainGasUsed      String?
+
+  attachments RecordAttachment[]
+  auditEntries AuditEntry[]
+
+  @@index([ownerId])
+  @@index([authorityId])
+  @@index([status])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model RecordAttachment {
+  id        String   @id @default(cuid())
+  recordId  String
+  name      String
+  type      String
+  size      Int
+  url       String
+  uploadedAt DateTime @default(now())
+
+  record Record @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@index([recordId])
+}
+
+model AuditEntry {
+  id             String   @id @default(cuid())
+  recordId       String
+  action         String   // created | updated | verified | deleted | shared | requested
+  performedBy    String
+  performedByName String
+  changesSummary String
+  details        Json?    // optional extra data
+  transactionHash String?
+  blockNumber    Int?
+  createdAt      DateTime @default(now())
+
+  record Record @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@index([recordId])
+  @@index([performedBy])
+  @@index([createdAt])
+}
